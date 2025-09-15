@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Profile Setup — ChatApp</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="/stylesheets/style.css">
+</head>
+<body class="auth-body">
+  <main class="auth-card">
+    <h1 class="brand">Set up your profile</h1>
+    <p class="muted">Choose name, bio and select an avatar</p>
+
+    <form method="post" action="/profile-setup" class="form">
+      <label>Name<input name="name" required value="<%= user.name || '' %>"></label>
+      <label>Bio<textarea name="bio"><%= user.bio || '' %></textarea></label>
+
+      <div style="text-align:left;margin-top:8px;">
+        <p style="margin:6px 0;">Choose an avatar</p>
+        <div class="avatar-grid">
+          <% avatars.forEach(function(i){ %>
+            <label class="avatar-option">
+              <input type="radio" name="avatarIndex" value="<%= i %>" <%= (user.avatarIndex===i) ? 'checked' : '' %> />
+              <div class="avatar avatar-<%= i %>"><%= (user.name||user.username||'U').slice(0,2).toUpperCase() %></div>
+            </label>
+          <% }) %>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <button class="btn">Save and continue</button>
+      </div>
+    </form>
+  </main>
+</body>
+</html>

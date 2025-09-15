@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title><%= mode === 'signup' ? 'Signup' : 'Login' %> — ChatApp</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="/stylesheets/style.css">
+</head>
+<body class="auth-body">
+  <main class="auth-card">
+    <h1 class="brand">Chatify</h1>
+    <p class="muted">Developed by Raj Shah, with Love ♥️</p>
+
+    <% if (error) { %>
+      <div class="error"><%= error %></div>
+    <% } %>
+
+    <% if (mode === 'signup') { %>
+      <form method="post" action="/auth/signup" class="form">
+        <label>Username<input name="username" required></label>
+        <label>Name<input name="name"></label>
+        <label>Email<input name="email" type="email"></label>
+        <label>Password<input name="password" type="password" required></label>
+        <button class="btn">Create account</button>
+      </form>
+      <p class="muted">Already have account? <a href="/auth/login">Login</a></p>
+    <% } else { %>
+      <form method="post" action="/auth/login" class="form">
+        <label>Username<input name="username" required></label>
+        <label>Password<input name="password" type="password" required></label>
+        <button class="btn">Login</button>
+      </form>
+      <p class="muted">New here? <a href="/auth/signup">Signup</a></p>
+    <% } %>
+  </main>
+</body>
+</html>

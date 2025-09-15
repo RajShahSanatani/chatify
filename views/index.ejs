@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>ChatApp — Home</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="/stylesheets/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <div class="brand">Chatify</div>
+      <div class="top-actions">
+        <a class="profile-link" id="openProfile">Profile</a>
+        <a href="/auth/logout" class="btn-ghost">Logout</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container app-grid">
+    <aside class="left">
+      <div class="search-card">
+        <input id="searchInput" placeholder="Search name or username..." />
+        <div id="searchResults" class="search-results"></div>
+      </div>
+
+      <section class="card">
+        <h3>Friends</h3>
+        <ul id="friendsList" class="list"></ul>
+      </section>
+
+      <section class="card">
+        <h4>Pending Requests</h4>
+        <ul id="pendingList" class="list"></ul>
+      </section>
+    </aside>
+
+    <section class="right card chat-area">
+      <div class="chat-header-area">
+        <div id="chatHeader" class="chat-header">Select friend to start chat</div>
+        <div id="typingIndicator" class="typing-indicator"></div>
+      </div>
+      <div id="messages" class="messages"></div>
+      <form id="msgForm" class="msg-form" style="display:none;">
+        <input id="msgInput" autocomplete="off" placeholder="Type a message..." />
+        <button type="submit">Send</button>
+        <!-- mic button will be appended dynamically by chat.js -->
+      </form>
+    </section>
+  </main>
+
+  <!-- Profile Modal -->
+  <div id="profileModal" class="modal hidden">
+    <div class="modal-card">
+      <h3>Edit Profile</h3>
+      <form id="profileForm" method="post" action="/profile">
+        <label>Name<input name="name" id="profileName"></label>
+        <label>Bio<textarea name="bio" id="profileBio"></textarea></label>
+        <div style="margin-top:8px;">
+          <p style="margin:6px 0;">Choose avatar</p>
+          <div id="avatarChoices" class="avatar-grid"></div>
+        </div>
+        <div class="modal-actions" style="margin-top:10px;">
+          <button class="btn">Save</button>
+          <button type="button" id="closeProfile" class="btn-ghost">Close</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    window.ME = <%- JSON.stringify(user) %>;
+  </script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/javascripts/chat.js"></script>
+</body>
+</html>
