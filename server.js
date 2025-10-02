@@ -7,6 +7,9 @@ const mongoose = require('mongoose');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
 const bcrypt = require('bcryptjs');
+const multer = require('multer');
+const sharp = require('sharp');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -29,6 +32,7 @@ const UserSchema = new Schema({
   password: { type: String, required: true },
   bio: { type: String, default: '' },
   avatarIndex: { type: Number, default: null },
+  profilePic: { type: String, default: null }, // /uploads/...
   friends: [{ type: Schema.Types.ObjectId, ref: 'User' }],
   friendRequests: [{ type: Schema.Types.ObjectId, ref: 'User' }],
   // presence
@@ -38,16 +42,26 @@ const UserSchema = new Schema({
 
 const MessageSchema = new Schema({
   sender: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  receiver: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  content: { type: String, required: true }, // text or base64 audio data URL
-  type: { type: String, enum: ['text','voice'], default: 'text' },
+  receiver: { type: Schema.Types.ObjectId, ref: 'User' }, // for private
+  group: { type: Schema.Types.ObjectId, ref: 'Group' },   // for group messages
+  content: { type: String, required: true }, // text or base64 audio data URL or image URL
+  type: { type: String, enum: ['text','voice','image'], default: 'text' },
+  reactions: [{ user: { type: Schema.Types.ObjectId, ref: 'User' }, emoji: String }],
+  unsent: { type: Boolean, default: false },
   read: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }
 });
 MessageSchema.index({ sender: 1, receiver: 1, createdAt: -1 });
 
+const GroupSchema = new Schema({
+  name: { type: String, required: true },
+  members: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+  createdAt: { type: Date, default: Date.now }
+});
+
 const User = mongoose.model('User', UserSchema);
 const Message = mongoose.model('Message', MessageSchema);
+const Group = mongoose.model('Group', GroupSchema);
 
 // --- Session middleware
 const sessionMiddleware = session({
@@ -62,7 +76,7 @@ const sessionMiddleware = session({
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 app.use(express.urlencoded({ extended: true }));
-app.use(express.json({ limit: '5mb' })); // allow larger payloads for audio base64
+app.use(express.json({ limit: '10mb' })); // allow larger payloads for audio/base64/image
 app.use(sessionMiddleware);
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -74,6 +88,26 @@ function ensureAuth(req, res, next) {
 async function currentUser(req) {
   if (!req.session || !req.session.userId) return null;
   return await User.findById(req.session.userId).lean();
+}
+
+// --- File upload (profile pic)
+const uploadDir = path.join(__dirname, 'public', 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: function(req, file, cb) { cb(null, uploadDir); },
+  filename: function(req, file, cb) {
+    const ext = path.extname(file.originalname) || '.jpg';
+    cb(null, `${Date.now()}-${Math.round(Math.random()*1e9)}${ext}`);
+  }
+});
+const upload = multer({ storage, limits: { fileSize: 3 * 1024 * 1024 } }); // 3MB max
+
+async function compressAndResize(filePath) {
+  const outPath = filePath.replace(/(\.\w+)$/, (m) => `-sm${m}`);
+  await sharp(filePath).resize(400, 400, { fit: 'cover' }).jpeg({ quality: 72 }).toFile(outPath);
+  try { fs.unlinkSync(filePath); } catch(_) {}
+  return path.basename(outPath);
 }
 
 // --- Routes: auth + redirect to profile-setup if incomplete
@@ -139,7 +173,7 @@ app.get('/auth/logout', (req, res) => {
   req.session.destroy(()=>res.redirect('/auth/login'));
 });
 
-// --- profile setup
+// --- profile setup & picture upload
 app.get('/profile-setup', ensureAuth, async (req, res) => {
   const me = await User.findById(req.session.userId).lean();
   res.render('profile-setup', { user: me, avatars: Array.from({length:10}, (_,i)=>i) });
@@ -151,11 +185,25 @@ app.post('/profile-setup', ensureAuth, async (req, res) => {
   res.redirect('/');
 });
 
+// profile picture upload route
+app.post('/profile/pic', ensureAuth, upload.single('profilePic'), async (req, res) => {
+  try {
+    if (!req.file) return res.redirect('/');
+    const compressedName = await compressAndResize(req.file.path);
+    const urlPath = '/uploads/' + compressedName;
+    await User.findByIdAndUpdate(req.session.userId, { profilePic: urlPath });
+    res.redirect('/');
+  } catch (e) {
+    console.error('profile pic error', e);
+    res.redirect('/');
+  }
+});
+
 // quick API for client to fetch me (populated friendRequests & friends)
 app.get('/api/me', ensureAuth, async (req, res) => {
   const me = await User.findById(req.session.userId)
-    .populate({ path: 'friendRequests', select: 'username name avatarIndex online lastSeen' })
-    .populate({ path: 'friends', select: 'username name avatarIndex online lastSeen' })
+    .populate({ path: 'friendRequests', select: 'username name avatarIndex profilePic online lastSeen' })
+    .populate({ path: 'friends', select: 'username name avatarIndex profilePic online lastSeen' })
     .lean();
   res.json({ user: me });
 });
@@ -168,36 +216,34 @@ app.get('/search', ensureAuth, async (req, res) => {
   const users = await User.find({
     _id: { $ne: req.session.userId },
     $or: [{ username: re }, { name: re }]
-  }).limit(12).select('username name avatarIndex online lastSeen').lean();
+  }).limit(12).select('username name avatarIndex profilePic online lastSeen').lean();
   res.json({ users });
 });
 
 // friends + last message + unread flag + online/lastSeen
 app.get('/friends', ensureAuth, async (req, res) => {
-  const me = await User.findById(req.session.userId).populate('friends', 'username name avatarIndex online lastSeen').lean();
+  const me = await User.findById(req.session.userId).populate('friends', 'username name avatarIndex profilePic online lastSeen').lean();
   const friends = me.friends || [];
   const friendsWithLast = await Promise.all(friends.map(async (f) => {
     const last = await Message.findOne({
       $or: [
         { sender: req.session.userId, receiver: f._id },
         { sender: f._id, receiver: req.session.userId }
-      ]
+      ],
+      unsent: false
     }).sort({ createdAt: -1 }).lean();
-    const unread = await Message.exists({ sender: f._id, receiver: req.session.userId, read: false });
+    const unread = await Message.exists({ sender: f._id, receiver: req.session.userId, read: false, unsent: false });
     return { user: f, lastMessage: last || null, hasUnread: !!unread };
   }));
   res.json({ friends: friendsWithLast });
 });
 
-// get messages and mark them read (so unread indicator clears)
-// Also emit messages-read event to the friend (so sender sees read/seen)
+// get messages and mark them read
 app.get('/messages/:friendId', ensureAuth, async (req, res) => {
   const friendId = req.params.friendId;
   const me = await User.findById(req.session.userId).select('friends').lean();
   if (!me.friends.find(f => String(f) === String(friendId))) return res.status(403).json({ error: 'Not friends' });
-  // mark incoming messages from friend as read
   await Message.updateMany({ sender: friendId, receiver: req.session.userId, read: false }, { $set: { read: true } });
-  // notify friend (sender) that their messages were read
   const io = app.get('io');
   if (io) {
     io.to(String(friendId)).emit('messages-read', { by: String(req.session.userId), to: String(friendId) });
@@ -206,7 +252,8 @@ app.get('/messages/:friendId', ensureAuth, async (req, res) => {
     $or: [
       { sender: req.session.userId, receiver: friendId },
       { sender: friendId, receiver: req.session.userId }
-    ]
+    ],
+    unsent: false
   }).sort({ createdAt: 1 }).lean();
   res.json({ messages: msgs });
 });
@@ -224,7 +271,7 @@ app.post('/friend/request/:id', ensureAuth, async (req, res) => {
     target.friendRequests.push(me._id);
     await target.save();
     const io = app.get('io');
-    if (io) io.to(targetId.toString()).emit('friend-request', { from: { _id: me._id, username: me.username, name: me.name, avatarIndex: me.avatarIndex } });
+    if (io) io.to(targetId.toString()).emit('friend-request', { from: { _id: me._id, username: me.username, name: me.name, avatarIndex: me.avatarIndex, profilePic: me.profilePic } });
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -232,7 +279,7 @@ app.post('/friend/request/:id', ensureAuth, async (req, res) => {
   }
 });
 
-// accept friend
+// accept/decline/remove friend (unchanged)...
 app.post('/friend/accept/:id', ensureAuth, async (req, res) => {
   try {
     const fromId = req.params.id;
@@ -247,7 +294,7 @@ app.post('/friend/accept/:id', ensureAuth, async (req, res) => {
     await me.save();
     await other.save();
     const io = app.get('io');
-    if (io) io.to(fromId.toString()).emit('friend-accepted', { user: { _id: me._id, username: me.username, name: me.name, avatarIndex: me.avatarIndex } });
+    if (io) io.to(fromId.toString()).emit('friend-accepted', { user: { _id: me._id, username: me.username, name: me.name, avatarIndex: me.avatarIndex, profilePic: me.profilePic } });
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -255,7 +302,6 @@ app.post('/friend/accept/:id', ensureAuth, async (req, res) => {
   }
 });
 
-// decline friend
 app.post('/friend/decline/:id', ensureAuth, async (req, res) => {
   try {
     const fromId = req.params.id;
@@ -272,7 +318,6 @@ app.post('/friend/decline/:id', ensureAuth, async (req, res) => {
   }
 });
 
-// remove friend
 app.post('/friend/remove/:id', ensureAuth, async (req, res) => {
   try {
     const fid = req.params.id;
@@ -290,11 +335,33 @@ app.post('/friend/remove/:id', ensureAuth, async (req, res) => {
   }
 });
 
-// update profile (non-first-time)
-app.post('/profile', ensureAuth, async (req, res) => {
-  const { name, bio, avatarIndex } = req.body;
-  await User.findByIdAndUpdate(req.session.userId, { name, bio, avatarIndex: avatarIndex !== undefined ? Number(avatarIndex) : null });
-  res.redirect('/');
+// group routes
+app.post('/group/create', ensureAuth, async (req, res) => {
+  const { name, members } = req.body;
+  const mem = Array.isArray(members) ? members : (members ? [members] : []);
+  mem.push(req.session.userId);
+  const group = await Group.create({ name, members: mem });
+  res.json({ ok: true, group });
+});
+
+app.get('/groups', ensureAuth, async (req, res) => {
+  const groups = await Group.find({ members: req.session.userId }).lean();
+  res.json({ groups });
+});
+
+// messages unsend endpoint (optional REST)
+app.post('/messages/unsend/:id', ensureAuth, async (req, res) => {
+  const id = req.params.id;
+  const msg = await Message.findById(id);
+  if (!msg) return res.status(404).json({ error: 'Not found' });
+  if (String(msg.sender) !== String(req.session.userId)) return res.status(403).json({ error: 'Not allowed' });
+  msg.unsent = true;
+  await msg.save();
+  const io = app.get('io');
+  if (io) {
+    io.emit('message_unsent', { msgId: id });
+  }
+  res.json({ ok: true });
 });
 
 // --- HTTP + Socket.IO setup
@@ -308,12 +375,24 @@ io.use((socket, next) => {
   sessionMiddleware(socket.request, {}, next);
 });
 
+// utility: get global online count
+function getRoomSize(roomName) {
+  try {
+    const s = io.sockets.adapter.rooms.get(roomName);
+    return s ? s.size : 0;
+  } catch(e){ return 0; }
+}
+
 io.on('connection', async (socket) => {
   try {
     const req = socket.request;
     if (!req.session || !req.session.userId) { socket.disconnect(true); return; }
     const userId = String(req.session.userId);
     socket.join(userId);
+
+    // join global chat room automatically
+    socket.join('global_chat');
+    io.to('global_chat').emit('global_online_count', getRoomSize('global_chat'));
 
     // set user online and notify their friends
     await User.findByIdAndUpdate(userId, { online: true });
@@ -350,7 +429,7 @@ io.on('connection', async (socket) => {
       io.to(userId).emit('new message', out);
     });
 
-    // private voice message (content expected as data URL base64)
+    // private voice message
     socket.on('voice message', async ({ to, content }) => {
       try {
         if (!to || !content) return;
@@ -361,7 +440,6 @@ io.on('connection', async (socket) => {
           socket.emit('error-message', 'You can only message friends.');
           return;
         }
-        // Content should be a data URL (e.g. "data:audio/webm;....")
         const msg = await Message.create({ sender: userId, receiver: to, content, type: 'voice', read: false });
         const out = { _id: msg._id, sender: msg.sender, receiver: msg.receiver, content: msg.content, type: msg.type, createdAt: msg.createdAt };
         io.to(String(to)).emit('new message', out);
@@ -371,7 +449,102 @@ io.on('connection', async (socket) => {
       }
     });
 
-    // messages-read event from client (optional) - client may also trigger via GET /messages
+    // image message (client may upload as base64/dataurl)
+    socket.on('image message', async ({ to, content }) => {
+      try {
+        if (!to || !content) return;
+        const sender = await User.findById(userId).select('friends').lean();
+        if (!sender) return;
+        const isFriend = sender.friends.find(f => String(f) === String(to));
+        if (!isFriend) {
+          socket.emit('error-message', 'You can only message friends.');
+          return;
+        }
+        const msg = await Message.create({ sender: userId, receiver: to, content, type: 'image', read: false });
+        const out = { _id: msg._id, sender: msg.sender, receiver: msg.receiver, content: msg.content, type: msg.type, createdAt: msg.createdAt };
+        io.to(String(to)).emit('new message', out);
+        io.to(userId).emit('new message', out);
+      } catch (e) {
+        console.error('image message error', e);
+      }
+    });
+
+    // Global Chat
+    io.on("connection", (socket) => {
+    console.log("User connected");
+    socket.on("globalMessage", (data) => {
+      try {
+        io.emit("globalMessage", {
+          text: data.text,
+          username: data.username,
+          userId: data.userId
+        });
+      } catch (err) {
+        console.error("Error in global chat:", err);
+      }
+    });
+
+    // Friend Request
+    socket.on("friendRequest", (data) => {
+      try {
+        // Send only to target user
+        io.emit("friendRequest", {
+          from: data.from,
+          fromName: data.fromName,
+          to: data.to
+        });
+      } catch (err) {
+        console.error("Error in friend request:", err);
+      }
+    });
+  });
+
+
+    // join/leave group
+    socket.on('join_group', ({ groupId }) => {
+      if (!groupId) return;
+      socket.join('group_' + groupId);
+    });
+
+    socket.on('leave_group', ({ groupId }) => {
+      if (!groupId) return;
+      try { socket.leave('group_' + groupId); } catch(e) {}
+    });
+
+    // group message
+    socket.on('group_message', async ({ groupId, content }) => {
+      if (!groupId || !content) return;
+      const g = await Group.findById(groupId).lean();
+      if (!g || !g.members.find(m => String(m) === userId)) {
+        socket.emit('error-message', 'Not a group member');
+        return;
+      }
+      const msg = await Message.create({ sender: userId, group: groupId, content, type: 'text', read: false });
+      const out = { _id: msg._id, sender: msg.sender, group: msg.group, content: msg.content, createdAt: msg.createdAt };
+      io.to('group_' + groupId).emit('new_group_message', out);
+    });
+
+    // react on message
+    socket.on('react_message', async ({ msgId, emoji }) => {
+      if (!msgId || !emoji) return;
+      await Message.findByIdAndUpdate(msgId, { $push: { reactions: { user: userId, emoji } } });
+      io.emit('message_reaction', { msgId, emoji, userId });
+    });
+
+    // unsend message
+    socket.on('unsend_message', async ({ msgId }) => {
+      if (!msgId) return;
+      const msg = await Message.findById(msgId).lean();
+      if (!msg) return;
+      if (String(msg.sender) !== String(userId)) {
+        socket.emit('error-message', 'Not allowed to unsend');
+        return;
+      }
+      await Message.findByIdAndUpdate(msgId, { unsent: true });
+      io.emit('message_unsent', { msgId });
+    });
+
+    // messages-read event from client
     socket.on('messages-read', async ({ by, withUser }) => {
       if (!withUser || !by) return;
       io.to(String(withUser)).emit('messages-read', { by });
@@ -379,15 +552,15 @@ io.on('connection', async (socket) => {
 
     socket.on('disconnect', async () => {
       try {
-        // set offline and lastSeen
         await User.findByIdAndUpdate(userId, { online: false, lastSeen: new Date() });
-        // notify their friends
         const me2 = await User.findById(userId).select('friends').lean();
         if (me2 && me2.friends) {
           me2.friends.forEach(fid => {
             io.to(String(fid)).emit('user-offline', { userId, lastSeen: new Date() });
           });
         }
+        // global online count update
+        io.to('global_chat').emit('global_online_count', getRoomSize('global_chat'));
       } catch(e) {
         console.error('disconnect error', e);
       }
