@@ -36,6 +36,10 @@ body{
   align-items:start
 }
 
+.hidden {
+  display: none;
+}
+
 /* ----- cards ----- */
 .left .card, .right.card, .search-card{
   background:var(--card);
@@ -118,7 +122,7 @@ body{
 }
 .msg-me{background:linear-gradient(90deg,#00ffcc,#00ffaa);margin-left:auto;color:#000}
 .msg-other{background:#1e293b;border:1px solid #334155;color:#e2e8f0}
-.msg-time{font-size:11px;color:var(--muted);margin-top:6px}
+.msg-time{font-size:11px;color:rgb(244, 246, 243);margin-top:6px}
 .msg-form{display:flex;gap:8px;padding-top:8px}
 .msg-form input{
   flex:1;padding:10px;border-radius:8px;border:1px solid #2a3146;
@@ -161,6 +165,12 @@ body{
 .status-dot.online{background:#16a34a;box-shadow:0 0 8px #16a34a;}
 .typing-indicator{color:var(--accent);font-style:italic;margin-left:12px;font-size:13px;height:20px}
 .friend-meta .name{display:flex;align-items:center;gap:8px}
+
+/*  reactions + message actions  */
+.msg-reactions { margin-top:6px; display:flex; gap:6px; flex-wrap:wrap; }
+.msg-reactions .react { background:rgba(255,255,255,0.06); padding:4px 6px; border-radius:8px; font-size:13px; }
+.msg-actions { margin-top:8px; display:flex; gap:6px; }
+.msg-actions button:hover { background:rgba(26, 31, 19, 0.833); color:#fff; }
 
 /* --- header avatar + badge + last-seen + mic --- */
 
@@ -213,3 +223,5 @@ body{
   .chat-area{height:60vh}
   .container{padding:10px}
 }
+
+
