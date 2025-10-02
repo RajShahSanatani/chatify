@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="/stylesheets/style.css">
 </head>
-<body>
+<body data-view="home">
   <header class="topbar">
     <div class="container topbar-inner">
       <div class="brand">Chatify</div>
@@ -24,6 +24,12 @@
         <div id="searchResults" class="search-results"></div>
       </div>
 
+      <!-- Toggle Buttons -->
+      <div class="chat-toggle" style="margin:10px 0;">
+        <button id="friendsBtn" class="btn">Friends Chat</button>
+        <button id="globalBtn" class="btn">Global Chat</button>
+      </div>
+
       <section class="card">
         <h3>Friends</h3>
         <ul id="friendsList" class="list"></ul>
@@ -35,7 +41,8 @@
       </section>
     </aside>
 
-    <section class="right card chat-area">
+    <!-- Friends Chat -->
+    <section id="friendsChat" class="right card chat-area">
       <div class="chat-header-area">
         <div id="chatHeader" class="chat-header">Select friend to start chat</div>
         <div id="typingIndicator" class="typing-indicator"></div>
@@ -44,7 +51,18 @@
       <form id="msgForm" class="msg-form" style="display:none;">
         <input id="msgInput" autocomplete="off" placeholder="Type a message..." />
         <button type="submit">Send</button>
-        <!-- mic button will be appended dynamically by chat.js -->
+      </form>
+    </section>
+
+    <!-- Global Chat -->
+    <section id="globalChat" class="right card chat-area hidden">
+      <div class="chat-header-area">
+        <div class="chat-header">🌍 Global Chat (Add friends by searching their name/username)</div>
+      </div>
+      <div id="globalMessages" class="messages"></div>
+      <form id="globalForm" class="msg-form">
+        <input id="globalInput" autocomplete="off" placeholder="Type a message for everyone..." />
+        <button type="submit">Send</button>
       </form>
     </section>
   </main>
@@ -53,12 +71,19 @@
   <div id="profileModal" class="modal hidden">
     <div class="modal-card">
       <h3>Edit Profile</h3>
-      <form id="profileForm" method="post" action="/profile">
+      <form id="profileForm" method="post" action="/profile" enctype="multipart/form-data">
         <label>Name<input name="name" id="profileName"></label>
         <label>Bio<textarea name="bio" id="profileBio"></textarea></label>
         <div style="margin-top:8px;">
           <p style="margin:6px 0;">Choose avatar</p>
           <div id="avatarChoices" class="avatar-grid"></div>
+        </div>
+        <div style="margin-top:8px;">
+          <p style="margin:6px 0;">Profile photo (optional)</p>
+          <form id="picForm" method="post" action="/profile/pic" enctype="multipart/form-data">
+            <input type="file" name="profilePic" accept="image/*" capture="environment" />
+            <div style="margin-top:8px;"><button class="btn">Upload Photo</button></div>
+          </form>
         </div>
         <div class="modal-actions" style="margin-top:10px;">
           <button class="btn">Save</button>
@@ -73,5 +98,6 @@
   </script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/javascripts/chat.js"></script>
+
 </body>
 </html>
