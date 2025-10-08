@@ -12,7 +12,7 @@ The main idea of this project is to create a platform where:
 
 --- 
 
-## ✨ Key Highlights  
+## ✨ Key Highlights 
 
 - **Global Chatroom** – all users can send and receive messages instantly.  
 - **Friend Request System** – send friend requests directly from chat.  
