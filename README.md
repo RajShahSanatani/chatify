@@ -10,7 +10,7 @@ The main idea of this project is to create a platform where:
 - Chat messages are delivered in **real-time** using Socket.io.  
 - The app also shows **online/offline status** of users.  
 
---- 
+---
 
 ## ✨ Key Highlights 
 
