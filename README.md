@@ -1,4 +1,4 @@
-# 🌍 Real-Time Chat Application
+# 🌍 Real-Time Chat Application 
 
 This project is a **real-time chat application** where users can connect with each other instantly.  
 It is built using **Node.js, Express, Socket.io, MongoDB, and EJS**.  
