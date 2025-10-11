@@ -1,7 +1,13 @@
-# 🌍 Real-Time Chat Application 
+# 🌍 Real-Time Chat Application  
 
 This project is a **real-time chat application** where users can connect with each other instantly.  
 It is built using **Node.js, Express, Socket.io, MongoDB, and EJS**.  
+
+🔗 **Live Demo:** [Click here to try the app](https://chatify-sr2n.onrender.com/auth/login)
+
+---
+
+## 💡 Overview  
 
 The main idea of this project is to create a platform where:  
 
@@ -12,7 +18,7 @@ The main idea of this project is to create a platform where:
 
 ---
 
-## ✨ Key Highlights 
+## ✨ Key Highlights  
 
 - **Global Chatroom** – all users can send and receive messages instantly.  
 - **Friend Request System** – send friend requests directly from chat.  
@@ -49,3 +55,11 @@ The main idea of this project is to create a platform where:
 - Group chat feature.  
 - Media (image/file) sharing.  
 - Notification system for new messages and requests.  
+
+---
+
+## 🧠 Author  
+
+Developed by **Raj Omprakash Shah**  
+🎓 Final Year CSBS Student, Bharati Vidyapeeth, Navi Mumbai  
+📍 Maharashtra, India  
